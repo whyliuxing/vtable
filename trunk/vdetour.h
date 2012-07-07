@@ -1,7 +1,7 @@
 //////////////////////////////////////////////////////////////////////////
 //	Virtual Table Detour and Hooks Class for MSVC++						//
 //																		//
-//	Copyright (c) 2010 Harry Pidcock									//
+//	Copyright (c) 2010-2012 Harry Pidcock								//
 //																		//
 //	Permission is hereby granted, free of charge, to any person			//
 //	obtaining a copy of this software and associated documentation		//
