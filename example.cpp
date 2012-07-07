@@ -1,53 +1,53 @@
 #include "vdetour.h"
 
-class VTest
+class MainClass
 {
 public:
-	virtual void Test(int lol, int lol2)
+	virtual void FunctionA(int arg0, int arg1)
 	{
-		printf("Main %d %d\n", lol, lol2);
+		printf("\tMainClass::FunctionA arg0:%d arg1:%d\n", arg0, arg1);
 	}
 
-	virtual double Test2(int lol, int lol2, int lol3)
+	virtual double FunctionB(int arg0, int arg1, int arg2)
 	{
-		printf("SECOND %d %d %d\n", lol, lol2, lol3);
-		return bob;
+		printf("\tMainClass::FunctionB arg0:%d arg1:%d arg2:%d\n", arg0, arg1, arg2);
+
+		return m_MemberValue;
 	}
 
-	float bob;
+	float m_MemberValue;
 };
 
-class VTest2
+class AttachedClass
 {
 public:
-	void Test(int lol, int lol2)
+	void FunctionA(int arg0, int arg1)
 	{
-		printf("2nd Main %d %d\n", lol, lol2);
+		printf("\tAttachedClass::FunctionA arg0:%d arg1:%d\n", arg0, arg1);
 	}
 
-	void Test2(int lol, int lol2, int lol3)
+	void FunctionB(int arg0, int arg1, int arg2)
 	{
-		printf("SECOND2 %d %d %d\n", lol, lol2, lol3);
+		printf("\tAttachedClass::FunctionB arg0:%d arg1:%d arg2:%d\n", arg0, arg1, arg2);
 	}
 };
 
-class VTest3
+class AttachedClass2
 {
 public:
-	void Test(int lol, int lol2)
+	void FunctionA(int arg0, int arg1)
 	{
-		printf("3rd Main %d %d\n", lol, lol2);
-		return;
+		printf("\tAttachedClass2::FunctionA arg0:%d arg1:%d\n", arg0, arg1);
 	}
 
-	void Test2(int lol, int lol2, int lol3)
+	void FunctionB(int arg0, int arg1, int arg2)
 	{
-		printf("SECOND3 %d %d %d\n", lol, lol2, lol3);
+		printf("\tAttachedClass2::FunctionB arg0:%d arg1:%d arg2:%d\n", arg0, arg1, arg2);
 	}
 
-	double Test3(int lol, int lol2, int lol3)
+	double FunctionB_Replacement(int arg0, int arg1, int arg2)
 	{
-		printf("SECOND3Return %d %d %d\n", lol, lol2, lol3);
+		printf("\tAttachedClass2::FunctionB_Replacement arg0:%d arg1:%d arg2:%d\n", arg0, arg1, arg2);
 		return 9999999.0;
 	}
 };
@@ -55,32 +55,47 @@ public:
 
 int main()
 {
-	VTest *test = new VTest();
+	MainClass *testObject = new MainClass();
+	testObject->m_MemberValue = 500;
 
-	test->bob = 500;
+	// Call FunctionA normally.
+	printf("FunctionA, no hooks:\n");
+	testObject->FunctionA(1, 2);
 
-	test->Test(1, 2);
+	printf("\n\n");
 
-	CVTable *vtable = new CVTable(*((void ***)test));
+	// Create the vtable modifier.
+	CVTable *vtable = new CVTable(*((void ***)testObject));
 
-	vtable->Hint(0, 2, "Test");
-	vtable->Hook<void (VTest2:: *)(int, int)>(0, &VTest2::Test);
-	vtable->Hook<void (VTest3:: *)(int, int)>(0, &VTest3::Test);
+	// Give CVTable information about FunctionA.
+	vtable->Hint(0, 2, "FunctionA");
+	vtable->Hook<void (AttachedClass:: *)(int, int)>(0, &AttachedClass::FunctionA);
+	vtable->Hook<void (AttachedClass2:: *)(int, int)>(0, &AttachedClass2::FunctionA);
 
-	test->Test(1, 2);
+	printf("FunctionA, 2 hooks:\n");
+	testObject->FunctionA(1, 2);
 
-	vtable->Hint(1, 3, "Test2");
-	vtable->Hook<void (VTest2:: *)(int, int, int)>(1, &VTest2::Test2);
-	vtable->Hook<void (VTest3:: *)(int, int, int)>(1, &VTest3::Test2);
-	vtable->Detour<double (VTest3:: *)(int, int, int)>(1, &VTest3::Test3);
+	printf("\n\n");
 
-	printf("LOLOLOL %f\n", test->Test2(1, 2, 3));
+	// Give CVTable information about FunctionB.
+	vtable->Hint(1, 3, "FunctionB");
+	vtable->Hook<void (AttachedClass:: *)(int, int, int)>(1, &AttachedClass::FunctionB);
+	vtable->Hook<void (AttachedClass2:: *)(int, int, int)>(1, &AttachedClass2::FunctionB);
+	vtable->Detour<double (AttachedClass2:: *)(int, int, int)>(1, &AttachedClass2::FunctionB_Replacement);
+
+	printf("FunctionB, 2 hooks + detour:\n");
+	printf("\tFunctionB returned: %f\n", testObject->FunctionB(1, 2, 3));
+
+	printf("\n\n");
 
 	delete vtable;
 
-	printf("LOLOLOL %f\n", test->Test2(1, 2, 3));
+	printf("FunctionB, restored:\n");
+	printf("\tFunctionB returned: %f\n", testObject->FunctionB(1, 2, 3));
 
-	delete test;
+	printf("\n\n");
+
+	delete testObject;
 
 	system("pause");
 
