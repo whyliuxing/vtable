@@ -88,6 +88,7 @@ int main()
 
 	printf("\n\n");
 
+	// Delete the CVTable object, restoring the table.
 	delete vtable;
 
 	printf("FunctionB, restored:\n");
