@@ -62,7 +62,7 @@ class CVTable
 {
 public:
 	CVTable(void **vtable);
-	~CVTable();
+	virtual ~CVTable(void);
 
 	//************************************
 	// Method:    Hint
@@ -74,7 +74,7 @@ public:
 	// Parameter: size_t args
 	// Parameter: const char * name
 	//************************************
-	void Hint(size_t vindex, size_t args, const char *name);
+	virtual void Hint(size_t vindex, size_t args, const char *name);
 
 	//************************************
 	// Method:    Detour
@@ -106,7 +106,7 @@ public:
 	// Parameter: size_t vindex
 	// Parameter: void * func
 	//************************************
-	void Detour(size_t vindex, void *func);
+	virtual void Detour(size_t vindex, void *func);
 
 	//************************************
 	// Method:    RemoveDetour
@@ -116,7 +116,7 @@ public:
 	// Qualifier:
 	// Parameter: size_t vindex
 	//************************************
-	void RemoveDetour(size_t vindex);
+	virtual void RemoveDetour(size_t vindex);
 
 	//************************************
 	// Method:    Hook
@@ -148,7 +148,7 @@ public:
 	// Parameter: size_t vindex
 	// Parameter: void * func
 	//************************************
-	void Hook(size_t vindex, void *func);
+	virtual void Hook(size_t vindex, void *func);
 
 	//************************************
 	// Method:    RemoveHook
@@ -180,7 +180,7 @@ public:
 	// Parameter: size_t vindex
 	// Parameter: void * func
 	//************************************
-	void RemoveHook(size_t vindex, void *func);
+	virtual void RemoveHook(size_t vindex, void *func);
 
 	//************************************
 	// Method:    Revert
@@ -190,7 +190,7 @@ public:
 	// Qualifier:
 	// Parameter: size_t vindex
 	//************************************
-	void Revert(size_t vindex);
+	virtual void Revert(size_t vindex);
 
 	//************************************
 	// Method:    RevertAll
@@ -199,14 +199,14 @@ public:
 	// Returns:   void
 	// Qualifier:
 	//************************************
-	void RevertAll();
+	virtual void RevertAll(void);
 
 private:
 	void **m_pVTable;
 
 	std::map<size_t, CVEntry *>::iterator GetEntry(size_t vindex);
-	void *BaseVHook();
-	void CreateTrampoline(CVEntry *entry);
+	virtual void *BaseVHook(void);
+	virtual void CreateTrampoline(CVEntry *entry);
 
 	std::map<size_t, CVEntry *> m_Entries;
 };

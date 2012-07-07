@@ -251,49 +251,15 @@ void *CVTable::BaseVHook()
 	//		addresses since we copy the original function.
 
 	// Find the start of this function.
-	char *funcstartSignature = "\x55\x8B\xEC";
-	char *thisFunc = NULL;
-	void *startPtr = NULL;
-
 	__asm emms;
 
-	// An easy way to get the EIP.
+	// Get the CVEntry pointer.
+	CVEntry *entry;
+
 	__asm
 	{
-		call next;
-next:
-		pop eax;
-		mov startPtr, eax;
+		mov entry, 0xAABBCCDD; // This will get replaced with the pointer to the CVEntry for this function.
 	}
-
-	bool foundStart = false;
-
-	// Look for the start of the function.
-	for(size_t i = 0; i < 1024; i++)
-	{
-		thisFunc = (char *)((size_t)startPtr - i);
-		if(thisFunc[0] == funcstartSignature[0] &&
-			thisFunc[1] == funcstartSignature[1] &&
-			thisFunc[2] == funcstartSignature[2])
-		{
-			foundStart = true;
-			break;
-		}
-	}
-
-	// If we don't find the start of this function we are in the shit
-	//		since we cannot correct the ESP.
-	if(!foundStart)
-	{
-		__asm
-		{
-			mov eax, abort;
-			call eax;
-		}
-	}
-
-	// Get the CVEntry pointer.
-	CVEntry *entry = (CVEntry *)(*(void **)((size_t)thisFunc - sizeof(size_t)));
 
 	size_t argCount = entry->m_iArgCount;
 	size_t hookCount = entry->m_Hooks._Mylast - entry->m_Hooks._Myfirst;
@@ -301,7 +267,7 @@ next:
 	// Call all the hooks.
 	for(size_t i = 0; i < hookCount; i++)
 	{
-		void *hook = ((void **)entry->m_Hooks._Myfirst)[i];
+		void *hook = ((void **)entry->m_Hooks._Myfirst)[i]; // Might have some problems with other std libraries.
 		__asm
 		{
 			mov ebx, esp;
@@ -413,27 +379,33 @@ void CVTable::CreateTrampoline(CVEntry *entry)
 	}
 
 	// The size of a pointer, the new function and some padding.
-	size_t BaseVHookFuncSzFull = sizeof(size_t) + BaseVHookFuncSz + sizeof(size_t);
+	size_t BaseVHookFuncSzFull = BaseVHookFuncSz + sizeof(size_t);
 
 	entry->m_pTrampolineMem = malloc(BaseVHookFuncSzFull);
 	entry->m_pTrampolineMemSz = BaseVHookFuncSzFull;
 
 	size_t trampoline = (size_t)entry->m_pTrampolineMem;
 
-	// Copy the CVEntry for this trampoline.
-	memcpy((void *)trampoline, &entry, sizeof(size_t));
-
-	trampoline += sizeof(size_t);
-
 	// Copy the function.
 	memcpy((void *)trampoline, BaseVHookFunc, BaseVHookFuncSz);
+	
+	for(size_t i = 0; i < BaseVHookFuncSz; i++)
+	{
+		size_t *value = (size_t *)(trampoline + i);
+
+		if(*value == 0xAABBCCDD)
+		{
+			*value = (size_t)entry;
+			break;
+		}
+	}
 
 	trampoline += BaseVHookFuncSz;
 
 	// Padding.
 	memset((void *)trampoline, 0xCC, sizeof(size_t));
 
-	entry->m_pTrampoline = (void *)((size_t)entry->m_pTrampolineMem + sizeof(size_t));
+	entry->m_pTrampoline = entry->m_pTrampolineMem;
 
 	// Set this memory to executable.
 	DWORD oldProtect;
