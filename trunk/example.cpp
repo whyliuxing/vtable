@@ -82,5 +82,7 @@ int main()
 
 	delete test;
 
+	system("pause");
+
 	return 0;
 }
