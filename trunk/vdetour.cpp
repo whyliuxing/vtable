@@ -48,7 +48,8 @@ void CVTable::Hint(size_t vindex, size_t args, const char *name)
 	entry->m_pName = name;
 	entry->m_pDetour = NULL;
 	entry->m_pOriginalEntry = *(entry->m_pVEntry);
-	entry->m_Hooks.clear();
+	entry->m_CallHooks.clear();
+	entry->m_ReturnHooks.clear();
 
 	this->m_Entries[vindex] = entry;
 
@@ -138,34 +139,34 @@ void CVTable::RemoveDetour(size_t vindex)
 }
 
 //************************************
-// Method:    Hook
-// FullName:  CVTable::Hook
+// Method:    CallHook
+// FullName:  CVTable::CallHook
 // Access:    public 
 // Returns:   void
 // Qualifier:
 // Parameter: size_t vindex
 // Parameter: void * func
 //************************************
-void CVTable::Hook(size_t vindex, void *func)
+void CVTable::CallHook(size_t vindex, void *func)
 {
 	std::map<size_t, CVEntry *>::iterator itor = this->GetEntry(vindex);
 
 	if(itor != this->m_Entries.end())
 	{
-		itor->second->m_Hooks.push_back(func);
+		itor->second->m_CallHooks.push_back(func);
 	}
 }
 
 //************************************
-// Method:    RemoveHook
-// FullName:  CVTable::RemoveHook
+// Method:    RemoveCallHook
+// FullName:  CVTable::RemoveCallHook
 // Access:    public 
 // Returns:   void
 // Qualifier:
 // Parameter: size_t vindex
 // Parameter: void * func
 //************************************
-void CVTable::RemoveHook(size_t vindex, void *func)
+void CVTable::RemoveCallHook(size_t vindex, void *func)
 {
 	std::map<size_t, CVEntry *>::iterator itor = this->GetEntry(vindex);
 
@@ -173,13 +174,63 @@ void CVTable::RemoveHook(size_t vindex, void *func)
 	{
 		CVEntry *entry = itor->second;
 
-		std::vector<void *>::iterator itorx = entry->m_Hooks.begin();
+		std::vector<void *>::iterator itorx = entry->m_CallHooks.begin();
 
-		while(itorx != entry->m_Hooks.end())
+		while(itorx != entry->m_CallHooks.end())
 		{
 			if(*itorx == func)
 			{
-				entry->m_Hooks.erase(itorx);
+				entry->m_CallHooks.erase(itorx);
+				return;
+			}
+			itorx++;
+		}
+	}
+}
+
+//************************************
+// Method:    ReturnHook
+// FullName:  CVTable::ReturnHook
+// Access:    public 
+// Returns:   void
+// Qualifier:
+// Parameter: size_t vindex
+// Parameter: void * func
+//************************************
+void CVTable::ReturnHook(size_t vindex, void *func)
+{
+	std::map<size_t, CVEntry *>::iterator itor = this->GetEntry(vindex);
+
+	if(itor != this->m_Entries.end())
+	{
+		itor->second->m_ReturnHooks.push_back(func);
+	}
+}
+
+//************************************
+// Method:    RemoveReturnHook
+// FullName:  CVTable::RemoveReturnHook
+// Access:    public 
+// Returns:   void
+// Qualifier:
+// Parameter: size_t vindex
+// Parameter: void * func
+//************************************
+void CVTable::RemoveReturnHook(size_t vindex, void *func)
+{
+	std::map<size_t, CVEntry *>::iterator itor = this->GetEntry(vindex);
+
+	if(itor != this->m_Entries.end())
+	{
+		CVEntry *entry = itor->second;
+
+		std::vector<void *>::iterator itorx = entry->m_ReturnHooks.begin();
+
+		while(itorx != entry->m_ReturnHooks.end())
+		{
+			if(*itorx == func)
+			{
+				entry->m_ReturnHooks.erase(itorx);
 				return;
 			}
 			itorx++;
@@ -250,8 +301,9 @@ void *CVTable::BaseVHook()
 	//		they are all relative, we need calls to absolute
 	//		addresses since we copy the original function.
 
-	// Find the start of this function.
 	__asm emms;
+	
+	// Find the start of this function.
 
 	// Get the CVEntry pointer.
 	CVEntry *entry;
@@ -262,12 +314,12 @@ void *CVTable::BaseVHook()
 	}
 
 	size_t argCount = entry->m_iArgCount;
-	size_t hookCount = entry->m_Hooks._Mylast - entry->m_Hooks._Myfirst;
+	size_t hookCount = entry->m_CallHooks._Mylast - entry->m_CallHooks._Myfirst;
 
 	// Call all the hooks.
 	for(size_t i = 0; i < hookCount; i++)
 	{
-		void *hook = ((void **)entry->m_Hooks._Myfirst)[i]; // Might have some problems with other std libraries.
+		void *hook = ((void **)entry->m_CallHooks._Myfirst)[i]; // Might have some problems with other std libraries.
 		__asm
 		{
 			mov ebx, esp;
@@ -313,7 +365,51 @@ endLoopb:
 		mov eax, retFunc;
 		call eax;
 		mov esp, ebx;
-		fxch st(7); // Move our float or double into an unused register.
+	}
+
+	__asm
+	{
+		sub esp, 8;
+		fstp [esp];
+
+		push eax;
+		push edx;
+	}
+
+	hookCount = entry->m_ReturnHooks._Mylast - entry->m_ReturnHooks._Myfirst;
+
+	// Call all the hooks.
+	for(size_t i = 0; i < hookCount; i++)
+	{
+		void *hook = ((void **)entry->m_ReturnHooks._Myfirst)[i]; // Might have some problems with other std libraries.
+		__asm
+		{
+			mov ebx, esp;
+			mov ecx, argCount;
+			jcxz endLoop2;
+argLoop2:
+			// Push all the arguments.
+			mov eax, [ebp + 8 + ecx * 4];
+			push eax;
+			jcxz endLoop2;
+			sub ecx, 1;
+			jmp argLoop2;
+endLoop2:
+			mov ecx, this;
+			mov eax, hook;
+			call eax;
+			mov esp, ebx;
+		}
+	}
+
+	__asm
+	{
+		pop edx;
+		pop eax;
+
+		fld [esp];
+		fxch st(7);
+		add esp, 8;
 	}
 
 	// Do not touch eax or edx or fp7-6. It can be our return value.
@@ -336,6 +432,9 @@ endLoopb:
 		// The top of the stack needs to be the memory location we
 		// 		return to.
 		movd [esp], mm3;
+		
+		emms; // Clear x87 fp mode.
+		
 		fxch st(6);
 		ret;
 	}
