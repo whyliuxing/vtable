@@ -408,7 +408,7 @@ endLoop2:
 		pop eax;
 
 		fld [esp];
-		fxch st(7);
+		//fxch st(7);
 		add esp, 8;
 	}
 
@@ -416,26 +416,30 @@ endLoop2:
 
 	__asm
 	{
-		// Since we are restoring registers, we will just use the MMX
+		// Since we are restoring registers, we will just use the SSE
 		//		registers to store the amount of data to pop off the
 		//		stack.
-		movd mm1, popCount;
+		movss xmm1, popCount;
+
 		pop edi;
 		pop esi;
 		pop ebx;
 		mov esp, ebp;
 		pop ebp;
-		movd mm3, [esp]
-		movd mm2, esp;
-		paddd mm2, mm1;
-		movd esp, mm2;
+
+		movss xmm3, [esp] // Save return address.
+
+		mov [esp], esp; // Move stack pointer into xmm2
+		movss xmm2, [esp];
+		paddd xmm2, xmm1; // Shift stack pointer by the popCount saved above.
+		movss [esp], xmm2; // Move the adjusted stack pointer back into esp.
+		mov esp, [esp];
+
 		// The top of the stack needs to be the memory location we
 		// 		return to.
-		movd [esp], mm3;
+		movss [esp], xmm3;
 		
-		emms; // Clear x87 fp mode.
-		
-		fxch st(6);
+		//fxch st(6);
 		ret;
 	}
 }
