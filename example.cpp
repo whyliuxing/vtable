@@ -69,8 +69,8 @@ int main()
 
 	// Give CVTable information about FunctionA.
 	vtable->Hint(0, 2, "FunctionA");
-	vtable->Hook<void (AttachedClass:: *)(int, int)>(0, &AttachedClass::FunctionA);
-	vtable->Hook<void (AttachedClass2:: *)(int, int)>(0, &AttachedClass2::FunctionA);
+	vtable->CallHook<void (AttachedClass:: *)(int, int)>(0, &AttachedClass::FunctionA);
+	vtable->ReturnHook<void (AttachedClass2:: *)(int, int)>(0, &AttachedClass2::FunctionA);
 
 	printf("FunctionA, 2 hooks:\n");
 	testObject->FunctionA(1, 2);
@@ -79,8 +79,8 @@ int main()
 
 	// Give CVTable information about FunctionB.
 	vtable->Hint(1, 3, "FunctionB");
-	vtable->Hook<void (AttachedClass:: *)(int, int, int)>(1, &AttachedClass::FunctionB);
-	vtable->Hook<void (AttachedClass2:: *)(int, int, int)>(1, &AttachedClass2::FunctionB);
+	vtable->CallHook<void (AttachedClass:: *)(int, int, int)>(1, &AttachedClass::FunctionB);
+	vtable->ReturnHook<void (AttachedClass2:: *)(int, int, int)>(1, &AttachedClass2::FunctionB);
 	vtable->Detour<double (AttachedClass2:: *)(int, int, int)>(1, &AttachedClass2::FunctionB_Replacement);
 
 	printf("FunctionB, 2 hooks + detour:\n");

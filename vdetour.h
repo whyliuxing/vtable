@@ -43,7 +43,8 @@ class CVEntry
 {
 public:
 	void *m_pDetour;
-	std::vector<void *> m_Hooks;
+	std::vector<void *> m_CallHooks;
+	std::vector<void *> m_ReturnHooks;
 	void **m_pVEntry;
 	void *m_pOriginalEntry;
 	size_t m_iArgCount;
@@ -119,8 +120,8 @@ public:
 	virtual void RemoveDetour(size_t vindex);
 
 	//************************************
-	// Method:    Hook
-	// FullName:  CVTable<T>::Hook
+	// Method:    CallHook
+	// FullName:  CVTable<T>::CallHook
 	// Access:    public 
 	// Returns:   void
 	// Qualifier:
@@ -128,7 +129,7 @@ public:
 	// Parameter: T func
 	//************************************
 	template<class T>
-	void Hook(size_t vindex, T func)
+	void CallHook(size_t vindex, T func)
 	{
 		void *funcTypeless = NULL;
 		__asm
@@ -136,23 +137,23 @@ public:
 			mov eax, func;
 			mov funcTypeless, eax;
 		}
-		this->Hook(vindex, funcTypeless);
+		this->CallHook(vindex, funcTypeless);
 	};
 
 	//************************************
-	// Method:    Hook
-	// FullName:  CVTable::Hook
+	// Method:    CallHook
+	// FullName:  CVTable::CallHook
 	// Access:    public 
 	// Returns:   void
 	// Qualifier:
 	// Parameter: size_t vindex
 	// Parameter: void * func
 	//************************************
-	virtual void Hook(size_t vindex, void *func);
+	virtual void CallHook(size_t vindex, void *func);
 
 	//************************************
-	// Method:    RemoveHook
-	// FullName:  CVTable<T>::RemoveHook
+	// Method:    RemoveCallHook
+	// FullName:  CVTable<T>::RemoveCallHook
 	// Access:    public 
 	// Returns:   void
 	// Qualifier:
@@ -160,7 +161,7 @@ public:
 	// Parameter: T func
 	//************************************
 	template<class T>
-	void RemoveHook(size_t vindex, T func)
+	void RemoveCallHook(size_t vindex, T func)
 	{
 		void *funcTypeless = NULL;
 		__asm
@@ -168,19 +169,83 @@ public:
 			mov eax, func;
 			mov funcTypeless, eax;
 		}
-		this->RemoveHook(vindex, funcTypeless);
+		this->RemoveCallHook(vindex, funcTypeless);
 	};
 
 	//************************************
-	// Method:    RemoveHook
-	// FullName:  CVTable::RemoveHook
+	// Method:    RemoveCallHook
+	// FullName:  CVTable::RemoveCallHook
 	// Access:    public 
 	// Returns:   void
 	// Qualifier:
 	// Parameter: size_t vindex
 	// Parameter: void * func
 	//************************************
-	virtual void RemoveHook(size_t vindex, void *func);
+	virtual void RemoveCallHook(size_t vindex, void *func);
+
+	//************************************
+	// Method:    ReturnHook
+	// FullName:  CVTable<T>::ReturnHook
+	// Access:    public 
+	// Returns:   void
+	// Qualifier:
+	// Parameter: size_t vindex
+	// Parameter: T func
+	//************************************
+	template<class T>
+	void ReturnHook(size_t vindex, T func)
+	{
+		void *funcTypeless = NULL;
+		__asm
+		{
+			mov eax, func;
+			mov funcTypeless, eax;
+		}
+		this->ReturnHook(vindex, funcTypeless);
+	};
+
+	//************************************
+	// Method:    ReturnHook
+	// FullName:  CVTable::ReturnHook
+	// Access:    public 
+	// Returns:   void
+	// Qualifier:
+	// Parameter: size_t vindex
+	// Parameter: void * func
+	//************************************
+	virtual void ReturnHook(size_t vindex, void *func);
+
+	//************************************
+	// Method:    RemoveReturnHook
+	// FullName:  CVTable<T>::RemoveReturnHook
+	// Access:    public 
+	// Returns:   void
+	// Qualifier:
+	// Parameter: size_t vindex
+	// Parameter: T func
+	//************************************
+	template<class T>
+	void RemoveReturnHook(size_t vindex, T func)
+	{
+		void *funcTypeless = NULL;
+		__asm
+		{
+			mov eax, func;
+			mov funcTypeless, eax;
+		}
+		this->RemoveReturnHook(vindex, funcTypeless);
+	};
+
+	//************************************
+	// Method:    RemoveReturnHook
+	// FullName:  CVTable::RemoveReturnHook
+	// Access:    public 
+	// Returns:   void
+	// Qualifier:
+	// Parameter: size_t vindex
+	// Parameter: void * func
+	//************************************
+	virtual void RemoveReturnHook(size_t vindex, void *func);
 
 	//************************************
 	// Method:    Revert
