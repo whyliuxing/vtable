@@ -56,6 +56,8 @@ void CVTable::Hint(size_t vindex, size_t args, const char *name)
 	// Create our trampoline function.
 	this->CreateTrampoline(entry);
 
+	//printf("%s @ %p: %p -> %p\n", entry->m_pName, entry->m_pVEntry, *entry->m_pVEntry, entry->m_pTrampoline);
+
 	// Modify the virtual table to call our trampoline function.
 	DWORD oldProtect;
 	VirtualProtect((void *)entry->m_pVEntry, sizeof(size_t), PAGE_READWRITE, &oldProtect);
@@ -301,7 +303,7 @@ void *CVTable::BaseVHook()
 	//		they are all relative, we need calls to absolute
 	//		addresses since we copy the original function.
 
-	__asm emms;
+	//__asm emms;
 	
 	// Find the start of this function.
 
@@ -441,6 +443,8 @@ endLoop2:
 		
 		//fxch st(6);
 		ret;
+		int 3;
+		int 3;
 	}
 }
 
