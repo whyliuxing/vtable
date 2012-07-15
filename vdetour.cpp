@@ -1,28 +1,28 @@
 //////////////////////////////////////////////////////////////////////////
-//	Virtual Table Detour and Hooks Class for MSVC++						//
-//																		//
-//	Copyright (c) 2010-2012 Harry Pidcock								//
-//																		//
-//	Permission is hereby granted, free of charge, to any person			//
-//	obtaining a copy of this software and associated documentation		//
-//	files (the "Software"), to deal in the Software without				//
-//	restriction, including without limitation the rights to use,		//
-//	copy, modify, merge, publish, distribute, sublicense, and/or sell	//
-//	copies of the Software, and to permit persons to whom the			//
-//	Software is furnished to do so, subject to the following			//
-//	conditions:															//
-//																		//
-//	The above copyright notice and this permission notice shall be		//
-//	included in all copies or substantial portions of the Software.		//
-//																		//
-//	THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,		//
-//	EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES		//
-//	OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND			//
-//	NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT			//
-//	HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,		//
-//	WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING		//
-//	FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR		//
-//	OTHER DEALINGS IN THE SOFTWARE.										//
+//  Virtual Table Detour and Hooks Class for MSVC++
+//  
+//  Copyright (c) 2010-2012 Harry Pidcock
+//  
+//  Permission is hereby granted, free of charge, to any person
+//  obtaining a copy of this software and associated documentation
+//  files (the "Software"), to deal in the Software without
+//  restriction, including without limitation the rights to use,
+//  copy, modify, merge, publish, distribute, sublicense, and/or sell
+//  copies of the Software, and to permit persons to whom the
+//  Software is furnished to do so, subject to the following
+//  conditions:
+//  
+//  The above copyright notice and this permission notice shall be
+//  included in all copies or substantial portions of the Software.
+//  
+//  THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+//  EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES
+//  OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+//  NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT
+//  HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,
+//  WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+//  FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
+//  OTHER DEALINGS IN THE SOFTWARE.
 //////////////////////////////////////////////////////////////////////////
 
 #include "vdetour.h"
@@ -48,8 +48,9 @@ void CVTable::Hint(size_t vindex, size_t args, const char *name)
 	entry->m_pName = name;
 	entry->m_pDetour = NULL;
 	entry->m_pOriginalEntry = *(entry->m_pVEntry);
-	entry->m_CallHooks.clear();
-	entry->m_ReturnHooks.clear();
+	entry->m_CallHooks = new std::vector<void *>();
+	entry->m_ReturnHooks = new std::vector<void *>();
+	entry->UpdateHooks();
 
 	this->m_Entries[vindex] = entry;
 
@@ -136,7 +137,7 @@ void CVTable::RemoveDetour(size_t vindex)
 
 	if(itor != this->m_Entries.end())
 	{
-		this->m_Entries.erase(itor);
+		itor->second->m_pDetour = NULL;
 	}
 }
 
@@ -155,7 +156,9 @@ void CVTable::CallHook(size_t vindex, void *func)
 
 	if(itor != this->m_Entries.end())
 	{
-		itor->second->m_CallHooks.push_back(func);
+		CVEntry *entry = itor->second;
+		entry->m_CallHooks->push_back(func);
+		entry->UpdateHooks();
 	}
 }
 
@@ -176,13 +179,14 @@ void CVTable::RemoveCallHook(size_t vindex, void *func)
 	{
 		CVEntry *entry = itor->second;
 
-		std::vector<void *>::iterator itorx = entry->m_CallHooks.begin();
+		std::vector<void *>::iterator itorx = entry->m_CallHooks->begin();
 
-		while(itorx != entry->m_CallHooks.end())
+		while(itorx != entry->m_CallHooks->end())
 		{
 			if(*itorx == func)
 			{
-				entry->m_CallHooks.erase(itorx);
+				entry->m_CallHooks->erase(itorx);
+				entry->UpdateHooks();
 				return;
 			}
 			itorx++;
@@ -205,7 +209,11 @@ void CVTable::ReturnHook(size_t vindex, void *func)
 
 	if(itor != this->m_Entries.end())
 	{
-		itor->second->m_ReturnHooks.push_back(func);
+		CVEntry *entry = itor->second;
+
+		entry->m_ReturnHooks->push_back(func);
+
+		entry->UpdateHooks();
 	}
 }
 
@@ -226,13 +234,14 @@ void CVTable::RemoveReturnHook(size_t vindex, void *func)
 	{
 		CVEntry *entry = itor->second;
 
-		std::vector<void *>::iterator itorx = entry->m_ReturnHooks.begin();
+		std::vector<void *>::iterator itorx = entry->m_ReturnHooks->begin();
 
-		while(itorx != entry->m_ReturnHooks.end())
+		while(itorx != entry->m_ReturnHooks->end())
 		{
 			if(*itorx == func)
 			{
-				entry->m_ReturnHooks.erase(itorx);
+				entry->m_ReturnHooks->erase(itorx);
+				entry->UpdateHooks();
 				return;
 			}
 			itorx++;
@@ -266,6 +275,9 @@ void CVTable::Revert(size_t vindex)
 		VirtualProtect((void *)entry->m_pTrampolineMem, sizeof(entry->m_pTrampolineMemSz), PAGE_READWRITE, &oldProtect);
 		free((void *)entry->m_pTrampolineMem);
 
+		delete entry->m_CallHooks;
+		delete entry->m_ReturnHooks;
+		
 		delete entry;
 
 		this->m_Entries.erase(itor);
@@ -297,7 +309,7 @@ void CVTable::RevertAll()
 // Returns:   void *
 // Qualifier:
 //************************************
-void *CVTable::BaseVHook()
+/*void *CVTable::BaseVHook()
 {
 	// Warning: Cannot make direct calls in this thread since
 	//		they are all relative, we need calls to absolute
@@ -316,12 +328,12 @@ void *CVTable::BaseVHook()
 	}
 
 	size_t argCount = entry->m_iArgCount;
-	size_t hookCount = entry->m_CallHooks._Mylast - entry->m_CallHooks._Myfirst;
+	size_t hookCount = entry->m_CallHooks->_Mylast - entry->m_CallHooks->_Myfirst;
 
 	// Call all the hooks.
 	for(size_t i = 0; i < hookCount; i++)
 	{
-		void *hook = ((void **)entry->m_CallHooks._Myfirst)[i]; // Might have some problems with other std libraries.
+		void *hook = ((void **)entry->m_CallHooks->_Myfirst)[i]; // Might have some problems with other std libraries.
 		__asm
 		{
 			mov ebx, esp;
@@ -378,12 +390,12 @@ endLoopb:
 		push edx;
 	}
 
-	hookCount = entry->m_ReturnHooks._Mylast - entry->m_ReturnHooks._Myfirst;
+	hookCount = entry->m_ReturnHooks->_Mylast - entry->m_ReturnHooks->_Myfirst;
 
 	// Call all the hooks.
 	for(size_t i = 0; i < hookCount; i++)
 	{
-		void *hook = ((void **)entry->m_ReturnHooks._Myfirst)[i]; // Might have some problems with other std libraries.
+		void *hook = ((void **)entry->m_ReturnHooks->_Myfirst)[i]; // Might have some problems with other std libraries.
 		__asm
 		{
 			mov ebx, esp;
@@ -446,7 +458,13 @@ endLoop2:
 		int 3;
 		int 3;
 	}
-}
+}*/
+
+#ifdef _WIN64
+extern "C" void DynamicHook(void);
+#else
+extern "C" void __stdcall DynamicHook(void);
+#endif
 
 //************************************
 // Method:    CreateTrampoline
@@ -459,22 +477,9 @@ endLoop2:
 void CVTable::CreateTrampoline(CVEntry *entry)
 {
 	// Get the size and location of void *CVTable::BaseVHook()
-	void *BaseVHookFunc = NULL;
+	void *BaseVHookFunc = FollowJmp(DynamicHook);
 	size_t BaseVHookFuncSz = NULL;
 	void *ReturnSignature = (void *)"\xC3\xCC\xCC";
-
-	__asm
-	{
-		push eax;
-		mov eax, CVTable::BaseVHook;
-#ifdef _DEBUG
-		add eax, 1;
-		add eax, [eax];
-		add eax, 4;
-#endif
-		mov BaseVHookFunc, eax;
-		pop eax;
-	}
 
 	for(size_t i = 0; i < 1024; i++)
 	{
@@ -517,4 +522,25 @@ void CVTable::CreateTrampoline(CVEntry *entry)
 	// Set this memory to executable.
 	DWORD oldProtect;
 	VirtualProtect((void *)entry->m_pTrampolineMem, sizeof(entry->m_pTrampolineMemSz), PAGE_EXECUTE_READWRITE, &oldProtect);
+}
+
+void *CVTable::FollowJmp(void *ptr) const
+{
+	if(*(unsigned char *)ptr != 0xE9)
+		return ptr;
+
+	void *offsetPtr = (void *)((size_t)ptr + 1); // Skip the jmp instruction opcode.
+
+	int offset = *(int *)offsetPtr; // Will be an 32bit int even in x64
+
+	return (void *)((size_t)offsetPtr + offset + sizeof(int)); // Offset is from eip
+}
+
+void CVEntry::UpdateHooks(void)
+{
+	m_pCallHooks = m_CallHooks->data();
+	m_iCallHookCount = m_CallHooks->size();
+
+	m_pReturnHooks = m_ReturnHooks->data();
+	m_iReturnHookCount = m_ReturnHooks->size();
 }

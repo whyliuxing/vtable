@@ -1,28 +1,28 @@
 //////////////////////////////////////////////////////////////////////////
-//	Virtual Table Detour and Hooks Class for MSVC++						//
-//																		//
-//	Copyright (c) 2010-2012 Harry Pidcock								//
-//																		//
-//	Permission is hereby granted, free of charge, to any person			//
-//	obtaining a copy of this software and associated documentation		//
-//	files (the "Software"), to deal in the Software without				//
-//	restriction, including without limitation the rights to use,		//
-//	copy, modify, merge, publish, distribute, sublicense, and/or sell	//
-//	copies of the Software, and to permit persons to whom the			//
-//	Software is furnished to do so, subject to the following			//
-//	conditions:															//
-//																		//
-//	The above copyright notice and this permission notice shall be		//
-//	included in all copies or substantial portions of the Software.		//
-//																		//
-//	THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,		//
-//	EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES		//
-//	OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND			//
-//	NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT			//
-//	HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,		//
-//	WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING		//
-//	FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR		//
-//	OTHER DEALINGS IN THE SOFTWARE.										//
+//  Virtual Table Detour and Hooks Class for MSVC++
+//  
+//  Copyright (c) 2010-2012 Harry Pidcock
+//  
+//  Permission is hereby granted, free of charge, to any person
+//  obtaining a copy of this software and associated documentation
+//  files (the "Software"), to deal in the Software without
+//  restriction, including without limitation the rights to use,
+//  copy, modify, merge, publish, distribute, sublicense, and/or sell
+//  copies of the Software, and to permit persons to whom the
+//  Software is furnished to do so, subject to the following
+//  conditions:
+//  
+//  The above copyright notice and this permission notice shall be
+//  included in all copies or substantial portions of the Software.
+//  
+//  THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+//  EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES
+//  OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+//  NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT
+//  HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,
+//  WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+//  FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
+//  OTHER DEALINGS IN THE SOFTWARE.
 //////////////////////////////////////////////////////////////////////////
 
 #include <map>
@@ -39,19 +39,30 @@
 //		storing virtual table index
 //		information.
 //************************************
-class CVEntry
+struct CVEntry
 {
-public:
+	// MASM Detour:
 	void *m_pDetour;
-	std::vector<void *> m_CallHooks;
-	std::vector<void *> m_ReturnHooks;
-	void **m_pVEntry;
 	void *m_pOriginalEntry;
 	size_t m_iArgCount;
+
+	void *m_pCallHooks;
+	size_t m_iCallHookCount;
+
+	void *m_pReturnHooks;
+	size_t m_iReturnHookCount;
+
+	// Extra:
+	void **m_pVEntry;
 	const char *m_pName;
 	void *m_pTrampoline;
 	void *m_pTrampolineMem;
 	size_t m_pTrampolineMemSz;
+
+	std::vector<void *> *m_CallHooks;
+	std::vector<void *> *m_ReturnHooks;
+
+	void UpdateHooks();
 };
 
 //************************************
@@ -89,13 +100,14 @@ public:
 	template<class T>
 	void Detour(size_t vindex, T func)
 	{
-		void *funcTypeless = NULL;
-		__asm
+		union
 		{
-			mov eax, func;
-			mov funcTypeless, eax;
-		}
-		this->Detour(vindex, funcTypeless);
+			void *funcTypeless;
+			T funcTyped;
+		} u;
+
+		u.funcTyped = func;
+		this->Detour(vindex, u.funcTypeless);
 	};
 
 	//************************************
@@ -131,13 +143,14 @@ public:
 	template<class T>
 	void CallHook(size_t vindex, T func)
 	{
-		void *funcTypeless = NULL;
-		__asm
+		union
 		{
-			mov eax, func;
-			mov funcTypeless, eax;
-		}
-		this->CallHook(vindex, funcTypeless);
+			void *funcTypeless;
+			T funcTyped;
+		} u;
+
+		u.funcTyped = func;
+		this->CallHook(vindex, u.funcTypeless);
 	};
 
 	//************************************
@@ -163,13 +176,14 @@ public:
 	template<class T>
 	void RemoveCallHook(size_t vindex, T func)
 	{
-		void *funcTypeless = NULL;
-		__asm
+		union
 		{
-			mov eax, func;
-			mov funcTypeless, eax;
-		}
-		this->RemoveCallHook(vindex, funcTypeless);
+			void *funcTypeless;
+			T funcTyped;
+		} u;
+
+		u.funcTyped = func;
+		this->RemoveCallHook(vindex, u.funcTypeless);
 	};
 
 	//************************************
@@ -195,13 +209,14 @@ public:
 	template<class T>
 	void ReturnHook(size_t vindex, T func)
 	{
-		void *funcTypeless = NULL;
-		__asm
+		union
 		{
-			mov eax, func;
-			mov funcTypeless, eax;
-		}
-		this->ReturnHook(vindex, funcTypeless);
+			void *funcTypeless;
+			T funcTyped;
+		} u;
+
+		u.funcTyped = func;
+		this->ReturnHook(vindex, u.funcTypeless);
 	};
 
 	//************************************
@@ -227,12 +242,7 @@ public:
 	template<class T>
 	void RemoveReturnHook(size_t vindex, T func)
 	{
-		void *funcTypeless = NULL;
-		__asm
-		{
-			mov eax, func;
-			mov funcTypeless, eax;
-		}
+		void *funcTypeless = (void *)func;
 		this->RemoveReturnHook(vindex, funcTypeless);
 	};
 
@@ -270,8 +280,9 @@ private:
 	void **m_pVTable;
 
 	std::map<size_t, CVEntry *>::iterator GetEntry(size_t vindex);
-	virtual void *BaseVHook(void);
-	virtual void CreateTrampoline(CVEntry *entry);
+	//virtual void *BaseVHook(void);
+	void CreateTrampoline(CVEntry *entry);
+	void *FollowJmp(void *ptr) const;
 
 	std::map<size_t, CVEntry *> m_Entries;
 };

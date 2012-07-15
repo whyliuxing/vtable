@@ -1,28 +1,28 @@
 //////////////////////////////////////////////////////////////////////////
-//	Very Simple Jmp and Swap Detour Class for MSVC++					//
-//																		//
-//	Copyright (c) 2010-2012 Harry Pidcock								//
-//																		//
-//	Permission is hereby granted, free of charge, to any person			//
-//	obtaining a copy of this software and associated documentation		//
-//	files (the "Software"), to deal in the Software without				//
-//	restriction, including without limitation the rights to use,		//
-//	copy, modify, merge, publish, distribute, sublicense, and/or sell	//
-//	copies of the Software, and to permit persons to whom the			//
-//	Software is furnished to do so, subject to the following			//
-//	conditions:															//
-//																		//
-//	The above copyright notice and this permission notice shall be		//
-//	included in all copies or substantial portions of the Software.		//
-//																		//
-//	THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,		//
-//	EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES		//
-//	OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND			//
-//	NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT			//
-//	HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,		//
-//	WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING		//
-//	FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR		//
-//	OTHER DEALINGS IN THE SOFTWARE.										//
+//  Very Simple Jmp and Swap Detour Class for MSVC++
+//  
+//  Copyright (c) 2010-2012 Harry Pidcock
+//  
+//  Permission is hereby granted, free of charge, to any person
+//  obtaining a copy of this software and associated documentation
+//  files (the "Software"), to deal in the Software without
+//  restriction, including without limitation the rights to use,
+//  copy, modify, merge, publish, distribute, sublicense, and/or sell
+//  copies of the Software, and to permit persons to whom the
+//  Software is furnished to do so, subject to the following
+//  conditions:
+//  
+//  The above copyright notice and this permission notice shall be
+//  included in all copies or substantial portions of the Software.
+//  
+//  THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+//  EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES
+//  OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+//  NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT
+//  HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,
+//  WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+//  FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
+//  OTHER DEALINGS IN THE SOFTWARE.
 //////////////////////////////////////////////////////////////////////////
 
 #include "jmpswapdetour.h"
@@ -38,12 +38,19 @@
 CJmpSwapDetour::CJmpSwapDetour(void *function, void *detour) : 
 	m_bDetoured(false), 
 	m_Target(function), 
-	m_Detour(detour)
+	m_Detour(detour),
+	m_Jmp(NULL),
+	m_JmpSize(0)
 {
+	m_Target = FollowJmp(m_Target);
+	m_Detour = FollowJmp(m_Detour);
+
 	m_FunctionSize = GetFunctionSize(m_Target);
 
 	m_OriginalBytes = new unsigned char[m_FunctionSize];
 	memcpy_s(m_OriginalBytes, m_FunctionSize, m_Target, m_FunctionSize);
+
+	BuildJump(m_Detour);
 
 	Swap();
 }
@@ -64,7 +71,7 @@ CJmpSwapDetour::~CJmpSwapDetour(void)
 void CJmpSwapDetour::Swap(void)
 {
 	DWORD protect;
-	VirtualProtect(m_Target, m_FunctionSize, PAGE_READWRITE, &protect);
+	VirtualProtect(m_Target, m_FunctionSize, PAGE_EXECUTE_READWRITE, &protect);
 
 	if(m_bDetoured)
 	{
@@ -72,7 +79,7 @@ void CJmpSwapDetour::Swap(void)
 	}
 	else
 	{
-		EmitJump(m_Target, m_Detour);
+		memcpy_s(m_Target, m_FunctionSize, m_Jmp, m_JmpSize);
 	}
 
 	VirtualProtect(m_Target, m_FunctionSize, protect, &protect);
@@ -80,17 +87,46 @@ void CJmpSwapDetour::Swap(void)
 	m_bDetoured = !m_bDetoured;
 }
 
-// This function will emit an absolute jump.
-void CJmpSwapDetour::EmitJump(void *dest, void *target) const
-{
-	unsigned char *mem = (unsigned char *)dest;
-	// mov eax imm32;
-	mem[0] = 0xB8;
-	*((void **)&mem[1]) = target;
+#ifdef _WIN64
+extern "C" void JumpInstruction(void);
+#else
+extern "C" void __stdcall JumpInstruction(void);
+#endif
 
-	// jump eax;
-	mem[sizeof(void *) + 1] = 0xFF;
-	mem[sizeof(void *) + 2] = 0xE0;
+// This function will emit an absolute jump.
+void CJmpSwapDetour::BuildJump(void *target)
+{
+	unsigned char *jmp = (unsigned char *)FollowJmp(JumpInstruction);
+
+	m_JmpSize = 0;
+	for(size_t i = 0; i < 32; i++)
+	{
+		if(*((unsigned int *)&jmp[i]) == 0xCCCCCCCC)
+		{
+			m_JmpSize = i;
+			break;
+		}
+	}
+
+	m_Jmp = malloc(m_JmpSize);
+	memcpy(m_Jmp, jmp, m_JmpSize);
+
+	for(size_t i = 0; i < m_JmpSize; i++)
+	{
+		size_t *tPtr = (size_t *)((size_t)m_Jmp + i);
+
+#ifdef _WIN64
+		size_t ptr = 0xAABBCCDDEEFF0011;
+#else
+		size_t ptr = 0xAABBCCDD;
+#endif
+
+		if(*tPtr == ptr)
+		{
+			*tPtr = (size_t)target;
+			break;
+		}
+	}
 }
 
 
@@ -133,4 +169,16 @@ size_t CJmpSwapDetour::GetFunctionSize(void *function) const
 	}
 
 	return 0;
+}
+
+void *CJmpSwapDetour::FollowJmp(void *ptr) const
+{
+	if(*(unsigned char *)ptr != 0xE9)
+		return ptr;
+
+	void *offsetPtr = (void *)((size_t)ptr + 1); // Skip the jmp instruction opcode.
+
+	int offset = *(int *)offsetPtr; // Will be an 32bit int even in x64
+
+	return (void *)((size_t)offsetPtr + offset + sizeof(int)); // Offset is from eip
 }
