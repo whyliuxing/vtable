@@ -293,12 +293,10 @@ void CVTable::Revert(size_t vindex)
 //************************************
 void CVTable::RevertAll()
 {
-	std::map<size_t, CVEntry *>::reverse_iterator itor = this->m_Entries.rbegin();
-
-	while(itor != this->m_Entries.rend())
+	while(this->m_Entries.size() > 0)
 	{
-		this->Revert(itor->first);
-		itor++;
+		std::map<size_t, CVEntry *>::reverse_iterator current = this->m_Entries.rbegin();
+		this->Revert(current->first);
 	}
 }
 
